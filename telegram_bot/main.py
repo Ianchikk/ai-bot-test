@@ -10,6 +10,7 @@ from aiogram.fsm.state import StatesGroup, State
 from dotenv import load_dotenv
 from ai import ask_openai  # Importăm funcția pentru OpenAI
 from db import add_user, get_user  # Importăm funcțiile pentru baza de date
+from bitrix import create_deal, add_comment_to_deal
 
 # Setăm event loop corect pentru Windows
 if platform.system() == "Windows":
@@ -69,43 +70,56 @@ async def process_phone(message: Message, state: FSMContext):
 async def process_email(message: Message, state: FSMContext):
     user_data = await state.get_data()
 
-    await add_user(
-        telegram_id=message.from_user.id,
+    # Creăm un deal în Bitrix24
+    deal_id = create_deal(
         name=user_data["name"],
         phone=user_data["phone"],
         email=message.text,
         user_type=user_data["user_type"]
     )
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💬 Ask an AI question", callback_data="ask_ai")]
-    ])
+    if deal_id:
+        # Salvăm utilizatorul în PostgreSQL cu deal_id
+        await add_user(
+            telegram_id=message.from_user.id,
+            name=user_data["name"],
+            phone=user_data["phone"],
+            email=message.text,
+            user_type=user_data["user_type"],
+            deal_id=deal_id
+        )
 
-    await message.answer(f"✅ Informații salvate în baza de date!\n"
-                         f"👤 Nume: {user_data['name']}\n"
-                         f"📞 Telefon: {user_data['phone']}\n"
-                         f"📧 Email: {message.text}\n"
-                         f"🏢 Tip utilizator: {user_data['user_type']}\n"
-                         f"\nMulțumim pentru înregistrare! 🎉\n\n"
-                         f"Acum poți pune întrebări AI:", reply_markup=keyboard)
+        await message.answer(f"✅ Informațiile tale au fost salvate și s-a creat un deal în Bitrix24 cu ID-ul: {deal_id}")
+
+        # Afișăm butonul pentru AI după completarea formularului
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💬 Ask an AI question", callback_data=f"ask_ai_{deal_id}")]
+        ])
+        await message.answer("Acum poți pune întrebări AI:", reply_markup=keyboard)
+
+    else:
+        await message.answer("❌ Eroare la crearea deal-ului în Bitrix24. Încearcă din nou.")
 
     await state.clear()
 
+
 # Handler pentru butonul "Ask an AI question"
-@dp.callback_query(F.data == "ask_ai")
+@dp.callback_query(F.data.startswith("ask_ai_"))
 async def ask_ai_callback(callback: CallbackQuery):
-    await callback.message.answer("🤖 Introdu întrebarea ta pentru AI:")
+    deal_id = callback.data.split("_")[2]
+    await callback.message.answer(f"🤖 Introdu întrebarea ta pentru AI (va fi salvată în Deal ID {deal_id}):")
     await callback.answer()
 
-# Handler pentru orice mesaj -> Întrebări AI fără limită
 @dp.message()
 async def process_ai_question(message: Message):
-    user_exists = await get_user(message.from_user.id)
-    
-    if not user_exists:
+    user = await get_user(message.from_user.id)
+
+    if not user:
         await message.answer("⚠️ Trebuie să te înregistrezi înainte de a pune întrebări AI.\n"
                              "Folosește /start pentru a începe!")
         return
+
+    deal_id = user["deal_id"]
 
     await message.answer("⏳ Gândesc...")
 
@@ -118,8 +132,13 @@ async def process_ai_question(message: Message):
 
         await message.answer(f"💬 **Răspuns AI:**\n{response}")
 
+        # Salvăm conversația în Bitrix24
+        add_comment_to_deal(deal_id, f"**Întrebare:** {message.text}\n**Răspuns:** {response}")
+
     except Exception as e:
         await message.answer(f"❌ Eroare la procesarea cererii: {e}")
+
+
 
 # Pornirea botului
 async def main():
