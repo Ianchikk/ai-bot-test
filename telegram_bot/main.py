@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from dotenv import load_dotenv
 from db import add_user, get_user
+from ai import ask_openai 
 
 # Setăm SelectorEventLoop pe Windows pentru compatibilitate cu aiodns
 if platform.system() == "Windows":
@@ -30,13 +31,18 @@ class UserForm(StatesGroup):
 
 # /start - Afișează un buton pentru selecția tipului de utilizator
 @dp.message(Command("start"))
-async def start_command(message: Message, state: FSMContext):
+async def start_command(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💬 Ask an additional question", callback_data="ask_ai")],
         [InlineKeyboardButton(text="🏢 Company", callback_data="user_type:Company")],
         [InlineKeyboardButton(text="👤 Individual", callback_data="user_type:Individual")]
     ])
+    await message.answer("👋 Salut! Selectează o opțiune:", reply_markup=keyboard)
 
-    await message.answer("👋 Salut! Selectează tipul tău de utilizator:", reply_markup=keyboard)
+@dp.callback_query(F.data == "ask_ai")
+async def ask_ai_callback(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer("🤖 Introdu întrebarea ta pentru AI:")
+    await state.set_state("waiting_for_ai_question")
 
 # Selectează tipul de utilizator
 @dp.callback_query(F.data.startswith("user_type:"))
@@ -81,6 +87,30 @@ async def process_email(message: Message, state: FSMContext):
 
     await message.answer("✅ Datele tale au fost salvate cu succes!")
     await state.clear()  # Resetăm starea FSM
+
+@dp.message(Command("ask"))
+async def ask_ai(message: Message, state: FSMContext):
+    await message.answer("🤖 Introdu întrebarea ta pentru AI:")
+    await state.set_state("waiting_for_ai_question")
+
+@dp.message(F.state == "waiting_for_ai_question")
+async def process_ai_question(message: Message, state: FSMContext):
+    user_question = message.text
+    await message.answer("⏳ Gândesc...")
+
+    try:
+        print(f"📨 Întrebare primită: {user_question}")  # Debugging
+
+        response = await ask_openai(user_question)
+
+        print(f"✅ Răspuns OpenAI: {response}")  # Debugging
+        await message.answer(f"💬 **Răspuns AI:**\n{response}")
+
+    except Exception as e:
+        print(f"❌ Eroare în handler-ul AI: {e}")
+        await message.answer(f"❌ Eroare la procesarea cererii: {e}")
+
+    await state.clear()
 
 # Pornirea botului
 async def main():
