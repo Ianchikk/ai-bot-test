@@ -50,3 +50,29 @@ def add_comment_to_deal(deal_id, message):
         print(f"✅ Comentariu adăugat la Deal ID {deal_id}")
     else:
         print(f"❌ Eroare la adăugarea comentariului: {result}")
+
+def notify_manager(deal_id, user_name, phone, email):
+    """ Trimite o notificare în Bitrix24 pentru manager """
+    url = f"{BITRIX24_WEBHOOK}crm.timeline.comment.add.json"
+    message = f"🔔 **Solicitare Contact** 🔔\n\n"
+    message += f"👤 Utilizator: {user_name}\n"
+    message += f"📞 Telefon: {phone}\n"
+    message += f"📧 Email: {email}\n"
+    message += f"📌 Deal ID: {deal_id}\n\n"
+    message += f"➡️ Managerul trebuie să contacteze acest utilizator urgent!"
+
+    data = {
+        "fields": {
+            "ENTITY_ID": deal_id,
+            "ENTITY_TYPE": "deal",
+            "COMMENT": message
+        }
+    }
+
+    response = requests.post(url, json=data)
+    result = response.json()
+
+    if "result" in result:
+        print(f"✅ Notificare trimisă managerului pentru Deal ID {deal_id}")
+    else:
+        print(f"❌ Eroare la trimiterea notificării: {result}")

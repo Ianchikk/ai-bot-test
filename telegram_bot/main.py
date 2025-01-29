@@ -10,7 +10,7 @@ from aiogram.fsm.state import StatesGroup, State
 from dotenv import load_dotenv
 from ai import ask_openai  # Importăm funcția pentru OpenAI
 from db import add_user, get_user  # Importăm funcțiile pentru baza de date
-from bitrix import create_deal, add_comment_to_deal
+from bitrix import create_deal, add_comment_to_deal, notify_manager
 
 # Setăm event loop corect pentru Windows
 if platform.system() == "Windows":
@@ -91,16 +91,19 @@ async def process_email(message: Message, state: FSMContext):
 
         await message.answer(f"✅ Informațiile tale au fost salvate și s-a creat un deal în Bitrix24 cu ID-ul: {deal_id}")
 
-        # Afișăm butonul pentru AI după completarea formularului
+        # Afișăm butoanele interactive
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💬 Ask an AI question", callback_data=f"ask_ai_{deal_id}")]
+            [InlineKeyboardButton(text="💬 Ask an additional question", callback_data=f"ask_ai_{deal_id}")],
+            [InlineKeyboardButton(text="📞 Contact the manager", callback_data=f"contact_manager_{deal_id}")],
+            [InlineKeyboardButton(text="💳 Proceed to payment", url="https://your-payment-link.com")]
         ])
-        await message.answer("Acum poți pune întrebări AI:", reply_markup=keyboard)
+        await message.answer("Alege o opțiune:", reply_markup=keyboard)
 
     else:
         await message.answer("❌ Eroare la crearea deal-ului în Bitrix24. Încearcă din nou.")
 
     await state.clear()
+
 
 
 # Handler pentru butonul "Ask an AI question"
@@ -137,6 +140,32 @@ async def process_ai_question(message: Message):
 
     except Exception as e:
         await message.answer(f"❌ Eroare la procesarea cererii: {e}")
+
+
+@dp.callback_query(F.data.startswith("contact_manager_"))
+async def contact_manager_callback(callback: CallbackQuery):
+    deal_id = callback.data.split("_")[2]
+    user = await get_user(callback.from_user.id)
+
+    if not user:
+        await callback.message.answer("⚠️ Trebuie să te înregistrezi mai întâi.")
+        await callback.answer()
+        return
+
+    notify_manager(
+        deal_id=deal_id,
+        user_name=user["name"],
+        phone=user["phone"],
+        email=user["email"]
+    )
+
+    await callback.message.answer("📩 Am notificat un manager! Vei fi contactat în curând.")
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("proceed_payment_"))
+async def proceed_payment_callback(callback: CallbackQuery):
+    await callback.message.answer("💳 Click pe link pentru a efectua plata: [Plată](https://your-payment-link.com)", parse_mode="Markdown")
+    await callback.answer()
 
 
 
