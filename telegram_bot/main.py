@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import platform
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.filters import Command
@@ -8,6 +9,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from dotenv import load_dotenv
 from db import add_user, get_user
+
+# Setăm SelectorEventLoop pe Windows pentru compatibilitate cu aiodns
+if platform.system() == "Windows":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Încărcăm variabilele de mediu
 load_dotenv()
