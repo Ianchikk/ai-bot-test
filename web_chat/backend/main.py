@@ -6,7 +6,9 @@ import os
 import json
 from dotenv import load_dotenv
 from ai import ask_openai
-from bitrix import create_deal, add_comment_to_deal, notify_manager
+from bitrix import create_deal, add_comment_to_deal, notify_manager_to_join_chat, get_latest_messages_from_bitrix
+import asyncio
+from asyncio import Task
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL_WEB")
@@ -29,6 +31,33 @@ class User(BaseModel):
 
 async def connect_db():
     return await asyncpg.connect(DATABASE_URL)
+
+# Dicționar global pentru a păstra ID-urile mesajelor deja procesate
+processed_messages = {}
+
+async def fetch_bitrix_messages(deal_id):
+    """ Verifică periodic mesajele noi din Bitrix24 și le trimite în WebSocket, excluzând notificările și AI """
+    global processed_messages
+
+    if deal_id not in processed_messages:
+        processed_messages[deal_id] = set()
+
+    while True:
+        messages = get_latest_messages_from_bitrix(deal_id)
+
+        if messages:
+            for message in messages:
+                message_id = message["ID"]
+                message_text = message["COMMENT"].strip()  # Eliminăm spațiile goale
+
+                # Excludem notificările și răspunsurile AI din Bitrix24
+                if message_id not in processed_messages[deal_id] and not message_text.startswith(("🔔", "**Întrebare:**", "🤖 AI:")):
+                    processed_messages[deal_id].add(message_id)  # Marcam mesajul ca procesat
+                    
+                    # Trimitem doar mesajele scrise de manager
+                    await manager.send_message(deal_id, f"👔 Manager: {message_text}")
+
+        await asyncio.sleep(5)  # Verificăm la fiecare 5 secunde
 
 @app.post("/register")
 async def register_user(user: User):
@@ -66,18 +95,18 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+manager_tasks = {}  # Dicționar pentru a ține evidența task-urilor active
+
 @app.websocket("/ws/chat/{user_type}/{deal_id}")
 async def websocket_endpoint(websocket: WebSocket, user_type: str, deal_id: int):
     """ WebSocket pentru utilizatori și manageri """
-    print(f"🌐 Încercare de conexiune WebSocket: {user_type} pentru Deal {deal_id}")
+    await websocket.accept()
+    await manager.connect(websocket, user_type, deal_id)
 
-    try:
-        await websocket.accept()  # 🔹 Acceptăm conexiunea manual
-        print(f"✅ WebSocket Acceptat: {user_type} - Deal {deal_id}")
-
-        await manager.connect(websocket, user_type, deal_id)
-    except Exception as e:
-        print(f"❌ Eroare la acceptarea conexiunii WebSocket: {e}")
+    if user_type == "manager":
+        if deal_id not in manager_tasks:
+            task = asyncio.create_task(fetch_bitrix_messages(deal_id))
+            manager_tasks[deal_id] = task
 
     try:
         while True:
@@ -85,15 +114,23 @@ async def websocket_endpoint(websocket: WebSocket, user_type: str, deal_id: int)
             data_json = json.loads(data)
             message_text = data_json.get("message", "")
 
-            print(f"📩 Mesaj primit ({user_type} - Deal {deal_id}): {message_text}")  # Debugging
-
             if user_type == "manager":
                 await manager.send_message(deal_id, f"👔 Manager: {message_text}")
+                add_comment_to_deal(deal_id, message_text)  # Salvăm mesajul în Bitrix24
             else:
                 response = await ask_openai(message_text)
                 await manager.send_message(deal_id, f"🤖 AI: {response}")
                 add_comment_to_deal(deal_id, f"**Întrebare:** {message_text}\n**Răspuns:** {response}")
 
     except WebSocketDisconnect:
-        print(f"❌ {user_type} deconectat de la chat-ul Deal ID {deal_id}")
         await manager.disconnect(websocket, user_type, deal_id)
+        if user_type == "manager" and deal_id in manager_tasks:
+            manager_tasks[deal_id].cancel()  # Oprire fetching mesaje din Bitrix24
+            del manager_tasks[deal_id]
+
+        
+@app.post("/notify_manager/{deal_id}")
+async def notify_manager(deal_id: int):
+    """ Trimite notificare în Bitrix24 pentru manager când trebuie să se alăture chat-ului """
+    notify_manager_to_join_chat(deal_id)
+    return {"message": "Notificare trimisă managerului"}

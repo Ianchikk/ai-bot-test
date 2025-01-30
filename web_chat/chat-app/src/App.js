@@ -52,27 +52,30 @@ function App() {
   };
 
   // Funcție pentru a conecta managerul la WebSocket
-  const connectManager = () => {
+  const connectManager = async () => {
     if (!dealId) {
       alert("⚠️ Deal ID invalid. Înregistrează-te mai întâi.");
       return;
     }
-
-    if (socket) {
-      socket.close(); // Închide conexiunea existentă, dacă există
+  
+    try {
+      await axios.post(`http://localhost:8000/notify_manager/${dealId}`);
+  
+      const ws = new WebSocket(`ws://127.0.0.1:8000/ws/chat/manager/${dealId}`);
+  
+      ws.onopen = () => console.log("✅ WebSocket manager conectat.");
+      ws.onmessage = (event) => {
+        setMessages((prevMessages) => [...prevMessages, { text: event.data, sender: "manager" }]);
+      };
+      ws.onerror = (error) => console.error("❌ Eroare WebSocket manager:", error);
+      ws.onclose = () => console.log("❌ Conexiunea WebSocket manager s-a închis.");
+  
+      setSocket(ws);
+    } catch (error) {
+      console.error("❌ Eroare la trimiterea notificării în Bitrix24:", error);
     }
-
-    const ws = new WebSocket(`ws://127.0.0.1:8000/ws/chat/manager/${dealId}`);
-
-    ws.onopen = () => console.log("✅ WebSocket manager conectat.");
-    ws.onmessage = (event) => {
-      setMessages((prevMessages) => [...prevMessages, { text: event.data, sender: "manager" }]);
-    };
-    ws.onerror = (error) => console.error("❌ Eroare WebSocket manager:", error);
-    ws.onclose = () => console.log("❌ Conexiunea WebSocket manager s-a închis.");
-
-    setSocket(ws);
   };
+  
 
   // Trimite mesaj în chat
   const sendMessage = () => {

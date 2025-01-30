@@ -51,15 +51,31 @@ def add_comment_to_deal(deal_id, message):
     else:
         print(f"❌ Eroare la adăugarea comentariului: {result}")
 
-def notify_manager(deal_id, user_name, phone, email):
-    """ Trimite o notificare către manager în Bitrix24 """
-    url = f"{BITRIX24_WEBHOOK}crm.timeline.comment.add.json"
-    message = f"🔔 **Solicitare Contact** 🔔\n\n"
-    message += f"👤 Utilizator: {user_name}\n"
-    message += f"📞 Telefon: {phone}\n"
-    message += f"📧 Email: {email}\n"
-    message += f"📌 Deal ID: {deal_id}\n\n"
-    message += f"➡️ Managerul trebuie să contacteze acest utilizator urgent!"
+def notify_manager_to_join_chat(deal_id):
+    """ Trimite notificare în Bitrix24 doar dacă nu a fost deja trimisă """
+    url = f"{BITRIX24_WEBHOOK}crm.timeline.comment.list.json"
+    data = {
+        "filter": {
+            "ENTITY_ID": deal_id,
+            "ENTITY_TYPE": "deal"
+        },
+        "order": {"ID": "DESC"},
+        "select": ["COMMENT"]
+    }
+
+    response = requests.post(url, json=data)
+    result = response.json()
+
+    if "result" in result:
+        for comment in result["result"]:
+            if "**Un client a inițiat un chat!**" in comment["COMMENT"]:
+                print(f"⚠️ Notificarea pentru Deal ID {deal_id} a fost deja trimisă.")
+                return  # Oprim trimiterea notificării dacă deja există
+
+    # Dacă nu există notificare, o trimitem acum
+    message = f"🔔 **Un client a inițiat un chat!** 🔔\n\n"
+    message += f"📌 Deal ID: {deal_id}\n"
+    message += f"💬 Pentru a răspunde, folosește secțiunea de comentarii din acest deal."
 
     data = {
         "fields": {
@@ -69,10 +85,33 @@ def notify_manager(deal_id, user_name, phone, email):
         }
     }
 
+    response = requests.post(f"{BITRIX24_WEBHOOK}crm.timeline.comment.add.json", json=data)
+    result = response.json()
+
+    if "result" in result:
+        print(f"✅ Notificare trimisă pentru manager (Deal ID: {deal_id})")
+    else:
+        print(f"❌ Eroare la trimiterea notificării: {result}")
+
+
+
+def get_latest_messages_from_bitrix(deal_id):
+    """ Obține ultimele mesaje din Bitrix24 pentru acest deal """
+    url = f"{BITRIX24_WEBHOOK}crm.timeline.comment.list.json"
+    data = {
+        "filter": {
+            "ENTITY_ID": deal_id,
+            "ENTITY_TYPE": "deal"
+        },
+        "order": {"ID": "DESC"},
+        "select": ["ID", "COMMENT", "CREATED"]
+    }
+
     response = requests.post(url, json=data)
     result = response.json()
 
     if "result" in result:
-        print(f"✅ Notificare trimisă managerului pentru Deal ID {deal_id}")
+        return result["result"]
     else:
-        print(f"❌ Eroare la trimiterea notificării: {result}")
+        print(f"❌ Eroare la preluarea mesajelor Bitrix24: {result}")
+        return []
