@@ -1,52 +1,51 @@
-import React from "react";
-import { useForm } from "react-hook-form";
-import axios from "axios";
+import React, { useState, useEffect } from "react";
 
 function App() {
-  // Hook pentru gestionarea formularului
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [socket, setSocket] = useState(null);
 
-  // Funcție pentru trimiterea datelor către backend
-  const onSubmit = async (data) => {
-    try {
-      const response = await axios.post("http://localhost:8000/register", data);
-      alert("✅ Datele au fost trimise cu succes!");
-      console.log("Răspuns server:", response.data);
-    } catch (error) {
-      alert("❌ Eroare la trimiterea datelor!");
-      console.error("Eroare:", error);
+  // Conectăm WebSocket la serverul FastAPI
+  useEffect(() => {
+    const ws = new WebSocket("ws://127.0.0.1:8000/ws/chat");
+
+    ws.onmessage = (event) => {
+      setMessages((prevMessages) => [...prevMessages, { text: event.data, sender: "bot" }]);
+    };
+
+    ws.onclose = () => console.log("❌ Conexiunea WebSocket s-a închis");
+
+    setSocket(ws);
+
+    return () => ws.close();
+  }, []);
+
+  // Trimiterea mesajului către WebSocket
+  const sendMessage = () => {
+    if (socket && input.trim() !== "") {
+      socket.send(input);
+      setMessages((prevMessages) => [...prevMessages, { text: input, sender: "user" }]);
+      setInput("");
     }
   };
 
   return (
     <div style={{ maxWidth: "400px", margin: "auto", padding: "20px", textAlign: "center" }}>
-      <h2>📝 Înregistrează-te</h2>
-      <form onSubmit={handleSubmit(onSubmit)}>
-
-        {/* Câmp pentru nume */}
-        <div>
-          <label>Nume:</label>
-          <input {...register("name", { required: "Numele este obligatoriu" })} />
-          {errors.name && <p style={{ color: "red" }}>{errors.name.message}</p>}
-        </div>
-
-        {/* Câmp pentru telefon */}
-        <div>
-          <label>Telefon:</label>
-          <input {...register("phone", { required: "Telefonul este obligatoriu" })} />
-          {errors.phone && <p style={{ color: "red" }}>{errors.phone.message}</p>}
-        </div>
-
-        {/* Câmp pentru email */}
-        <div>
-          <label>Email:</label>
-          <input {...register("email", { required: "Emailul este obligatoriu", pattern: { value: /^\S+@\S+$/i, message: "Email invalid" } })} />
-          {errors.email && <p style={{ color: "red" }}>{errors.email.message}</p>}
-        </div>
-
-        {/* Buton Submit */}
-        <button type="submit">📩 Trimite</button>
-      </form>
+      <h2>💬 Chat AI</h2>
+      <div style={{ border: "1px solid #ddd", padding: "10px", minHeight: "200px" }}>
+        {messages.map((msg, index) => (
+          <p key={index} style={{ textAlign: msg.sender === "user" ? "right" : "left", color: msg.sender === "user" ? "blue" : "green" }}>
+            {msg.text}
+          </p>
+        ))}
+      </div>
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder="Scrie un mesaj..."
+      />
+      <button onClick={sendMessage}>📩 Trimite</button>
     </div>
   );
 }
