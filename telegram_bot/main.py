@@ -167,8 +167,6 @@ async def proceed_payment_callback(callback: CallbackQuery):
     await callback.message.answer("💳 Click pe link pentru a efectua plata: [Plată](https://your-payment-link.com)", parse_mode="Markdown")
     await callback.answer()
 
-
-
 # Pornirea botului
 async def main():
     logging.basicConfig(level=logging.INFO)
