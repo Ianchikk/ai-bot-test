@@ -9,6 +9,7 @@ from ai import ask_openai
 from bitrix import create_deal, add_comment_to_deal, notify_manager_to_join_chat, get_latest_messages_from_bitrix
 import asyncio
 from asyncio import Task
+from db import create_tables
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL_WEB")
@@ -23,6 +24,10 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],  # Elimină metodele nedorite
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def startup():
+    await create_tables()
 
 class User(BaseModel):
     name: str
