@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  db:
+    build:
+      dockerfile: Dockerfile.db
+    container_name: ai_tg_db
+    restart: always
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      POSTGRES_DB: ai_tg
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+
+  bot_tg:
+    build:
+      dockerfile: Dockerfile
+    container_name: ai_tg_backend
+    restart: always
+    depends_on:
+      - db
+    environment:
+      TELEGRAM_BOT_TOKEN: 7669015215:AAH4iLQog7CfsuVx40NZgo4AYG4PeCknYaE
+      DATABASE_URL: postgresql://admin:admin@db:5432/ai_tg
+      BITRIX24_WEBHOOK: https://b24-s3868k.bitrix24.com/rest/1/zcppykjo07zr0nco/
+      OPENAI_API_KEY: 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
+
+volumes:
+  pgdata:
