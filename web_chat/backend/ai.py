@@ -5,10 +5,10 @@ from dotenv import load_dotenv
 # Încărcăm variabilele de mediu
 load_dotenv()
 
-# 🔹 Preluăm cheia API OpenAI din fișierul .env
+# Preluăm cheia API OpenAI din fișierul .env
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# 🔹 Inițializăm clientul OpenAI
+# Inițializăm clientul OpenAI
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 async def ask_openai(prompt: str) -> str:
@@ -17,7 +17,7 @@ async def ask_openai(prompt: str) -> str:
         print(f"📨 Întrebare trimisă către OpenAI: {prompt}")  # Debugging
 
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # Poți folosi "gpt-4" dacă ai acces
+            model="gpt-3.5-turbo", 
             messages=[{"role": "user", "content": prompt}]
         )
 

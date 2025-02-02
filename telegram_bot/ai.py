@@ -13,7 +13,7 @@ async def ask_openai(prompt: str) -> str:
     try:
         print(f"📨 Trimit către OpenAI: {prompt}")  # Debugging
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # Sau "gpt-4" dacă ai acces
+            model="gpt-3.5-turbo", 
             messages=[{"role": "user", "content": prompt}]
         )
         answer = response.choices[0].message.content

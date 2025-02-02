@@ -29,8 +29,8 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL_WEB: postgresql://admin:admin@db:5432/ai_chat
-      BITRIX24_WEBHOOK: https://b24-s3868k.bitrix24.com/rest/1/zcppykjo07zr0nco/
-      OPENAI_API_KEY: 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
+      BITRIX24_WEBHOOK: your-bitrix-webhook
+      OPENAI_API_KEY: your-chat-api-key
 
   frontend:
     build:

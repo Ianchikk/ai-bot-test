@@ -16,7 +16,7 @@ DATABASE_URL = os.getenv("DATABASE_URL_WEB")
 
 app = FastAPI()
 
-# 🔹 Permitem conexiuni WebSocket și HTTP de la frontend (React)
+# Permitem conexiuni WebSocket și HTTP de la frontend (React)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],  # Restrânge la frontend-ul tău
